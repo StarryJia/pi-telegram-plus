@@ -308,5 +308,10 @@ describe("Telegram controller UI routing", () => {
       expect.objectContaining({ chatId: 777, text: expect.stringContaining("Command executed successfully") }),
     ]));
     expect(sent.find((item) => item.text.includes("Command failed"))).toBeUndefined();
+
+    // 验证命令执行完毕退出优雅期后，UI 上下文及模式完全还原
+    await new Promise((r) => setTimeout(r, 160));
+    expect(runner.uiContext).toBe(tuiUi);
+    expect(activeMode).toBe("tui");
   });
 });
