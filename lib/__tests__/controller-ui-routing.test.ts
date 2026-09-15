@@ -268,6 +268,13 @@ describe("Telegram controller UI routing", () => {
     const commands = new Map<string, (args: string, ctx: any) => Promise<void>>([
       ["test-cmd", async (_args, ctx) => {
         try {
+          // 显式验证对 ctx.ui 执行对象展开后方法依然完整保留且可正常调用
+          const spreadUi = { ...ctx.ui };
+          expect(typeof spreadUi.notify).toBe("function");
+          expect(typeof spreadUi.setStatus).toBe("function");
+          expect(spreadUi.theme).toBeDefined();
+
+          await spreadUi.notify("Spread notify works", "info");
           ctx.ui.notify("Command executed successfully", "info");
           commandExecuted = true;
         } catch (err) {
@@ -297,6 +304,7 @@ describe("Telegram controller UI routing", () => {
     expect(commandError).toBeUndefined();
     expect(commandExecuted).toBe(true);
     expect(sent).toEqual(expect.arrayContaining([
+      expect.objectContaining({ chatId: 777, text: expect.stringContaining("Spread notify works") }),
       expect.objectContaining({ chatId: 777, text: expect.stringContaining("Command executed successfully") }),
     ]));
     expect(sent.find((item) => item.text.includes("Command failed"))).toBeUndefined();
