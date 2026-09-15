@@ -44,6 +44,14 @@
     "@earendil-works/pi-coding-agent": ">=0.76.0 <0.86.0",
     "typebox": "*"
   },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "typebox": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "marked": "^18.0.4"
   },
