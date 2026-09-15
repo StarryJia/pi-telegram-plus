@@ -303,8 +303,14 @@ export function setRunnerUiContext(
   ui: unknown,
   mode: PiExtensionMode = TELEGRAM_EXTENSION_MODE,
 ): void {
-  if (typeof runner?.setUIContext !== "function") return;
-  runner.setUIContext(ui, mode);
+  if (!runner) return;
+  if (typeof runner.setUIContext === "function") {
+    runner.setUIContext(ui, mode);
+  }
+  // 保持动态路由 Proxy，防止被 Pi 0.85+ 的 wrapUIPromptContext 展平为静态对象
+  if (ui && (runner as any).uiContext !== undefined) {
+    (runner as any).uiContext = ui;
+  }
 }
 
 function redactKnownTokenPrefix(value: string): string {

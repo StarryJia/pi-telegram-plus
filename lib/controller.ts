@@ -213,23 +213,38 @@ function isSameTelegramTurnTarget(currentTurn: TelegramTurn | undefined, turn: T
 }
 
 function createRoutedTelegramUi(baseUi: unknown, telegramUi: ExtensionUIContext, turn: TelegramTurn): ExtensionUIContext {
+  const getTarget = () => {
+    const currentTurn = getCurrentTelegramTurn();
+    return (isSameTelegramTurnTarget(currentTurn, turn) ? telegramUi : baseUi) as object | undefined;
+  };
   return new Proxy({}, {
     get(_target, prop, receiver) {
       if (prop === "__piTelegramPlusRoutedUi") return true;
-      const currentTurn = getCurrentTelegramTurn();
-      const target = isSameTelegramTurnTarget(currentTurn, turn) ? telegramUi : baseUi;
-      const value = Reflect.get((target ?? {}) as object, prop, receiver);
+      const target = getTarget();
+      const value = Reflect.get(target ?? {}, prop, receiver);
       return typeof value === "function" ? value.bind(target) : value;
     },
     set(_target, prop, value, receiver) {
-      const currentTurn = getCurrentTelegramTurn();
-      const target = isSameTelegramTurnTarget(currentTurn, turn) ? telegramUi : baseUi;
-      return Reflect.set((target ?? {}) as object, prop, value, receiver);
+      const target = getTarget();
+      return Reflect.set(target ?? {}, prop, value, receiver);
     },
     has(_target, prop) {
-      const currentTurn = getCurrentTelegramTurn();
-      const target = isSameTelegramTurnTarget(currentTurn, turn) ? telegramUi : baseUi;
-      return prop in ((target ?? {}) as object);
+      const target = getTarget();
+      return prop in (target ?? {});
+    },
+    // 支持对象展开运算符（{ ...ui }），防止包装时丢失属性
+    ownKeys(_target) {
+      const target = getTarget();
+      return Reflect.ownKeys(target ?? {});
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      const target = getTarget();
+      const desc = Reflect.getOwnPropertyDescriptor(target ?? {}, prop);
+      if (!desc) return undefined;
+      return {
+        ...desc,
+        configurable: true,
+      };
     },
   }) as ExtensionUIContext;
 }

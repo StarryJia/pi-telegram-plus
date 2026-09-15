@@ -218,4 +218,87 @@ describe("Telegram controller UI routing", () => {
     expect(currentUi).toBe(tuiUi);
     expect(activeMode).toBe("tui");
   });
+
+  it("preserves notify and all UI methods when Pi 0.85+ wrapUIPromptContext spreads the routed UI", async () => {
+    const sent: Array<{ chatId: number; text: string }> = [];
+    const transport = createTransport(sent);
+    const tuiUi = {
+      notify: vi.fn(async (_message: string) => {}),
+      setStatus: vi.fn(),
+      get theme() { return { fg: () => "" }; },
+    };
+    let currentUi: any = tuiUi;
+    let activeMode = "tui";
+
+    const wrapUIPromptContext = (ui: any) => ({
+      ...ui,
+      select: (title: any, options: any, opts: any) => ui.select(title, options, opts),
+      confirm: (title: any, message: any, opts: any) => ui.confirm(title, message, opts),
+      input: (title: any, placeholder: any, opts: any) => ui.input(title, placeholder, opts),
+      editor: (title: any, prefill: any) => ui.editor(title, prefill),
+      custom: (factory: any, options: any) => ui.custom(factory, options),
+    });
+
+    const runner: any = {
+      uiContext: currentUi,
+      getUIContext: () => runner.uiContext,
+      setUIContext: (ui: any, mode?: string) => {
+        runner.uiContext = ui ? wrapUIPromptContext(ui) : undefined;
+        currentUi = runner.uiContext;
+        if (mode) activeMode = mode;
+      },
+      getCommand: () => undefined,
+      createCommandContext: () => {
+        const ctx: any = {
+          isIdle: () => true,
+          waitForIdle: async () => undefined,
+        };
+        Object.defineProperty(ctx, "ui", { get: () => runner.uiContext });
+        Object.defineProperty(ctx, "mode", { get: () => activeMode });
+        return ctx;
+      },
+    };
+
+    const session = { extensionRunner: runner } as any;
+    const uiRuntime = createTelegramUiRuntime({ getSession: () => session, transport });
+
+    let commandExecuted = false;
+    let commandError: Error | undefined;
+
+    const commands = new Map<string, (args: string, ctx: any) => Promise<void>>([
+      ["test-cmd", async (_args, ctx) => {
+        try {
+          ctx.ui.notify("Command executed successfully", "info");
+          commandExecuted = true;
+        } catch (err) {
+          commandError = err as Error;
+          throw err;
+        }
+      }],
+    ]);
+
+    const controller = createTelegramController({
+      getSession: () => session,
+      transport,
+      ui: uiRuntime,
+      authorizeUser: async () => true,
+      setActiveChatId: async () => undefined,
+      getBotUsername: () => "test-bot",
+      getMessageMode: () => "queue",
+      telegramCommands: commands,
+      getActiveTurn: () => undefined,
+      beginTelegramTurn: (chatId: number, replaceMessageId?: number) => ({ chatId, queuedAttachments: [], replaceMessageId }),
+      endTelegramTurn: () => undefined,
+    });
+
+    await controller.handleMessage({ message_id: 1, chat: { id: 777 }, from: { id: 1 }, text: "/test-cmd" });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(commandError).toBeUndefined();
+    expect(commandExecuted).toBe(true);
+    expect(sent).toEqual(expect.arrayContaining([
+      expect.objectContaining({ chatId: 777, text: expect.stringContaining("Command executed successfully") }),
+    ]));
+    expect(sent.find((item) => item.text.includes("Command failed"))).toBeUndefined();
+  });
 });
